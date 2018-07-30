@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Chat with Firebase and Vue.js</title>
     <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment-with-locales.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/5.3.0/firebase.js"></script>
     <script>
+
+      // firebase
       var config = {
         apiKey: "AIzaSyAhQji5X5vCoKebrXw6jX7EE_CBGJo3VlM",
         authDomain: "test-todo-31ea2.firebaseapp.com",
@@ -16,26 +19,29 @@
         messagingSenderId: "410075204641"
       };
       firebase.initializeApp(config);
+
+      // moment.js
+      moment.locale('ja');
     </script>
   </head>
   <body>
     <div id="message">
       <h1>chat!</h1>
       <ul id="chatlog">
-        <li v-for="chat in chats">{{chat.user}}: {{chat.text}}</li>
+        <li v-for="chat in chats"><img v-if="chat.img" v-bind:src="chat.img" width="50" height="50">{{chat.user}}: {{chat.text}} <small>{{ chat.fromNow }}</small></li>
       </ul>
       <div>
         <input
           type="text"
           v-if="authenticated"
-          v-on:keydown.enter="say"
+          v-on:keydown.meta.enter="say"
           v-bind:disabled="sending"
           v-model="message">
         <button
           v-if="authenticated"
           v-bind:disabled="sending"
           v-on:click="say">{{sending ? 'sending...' : 'say'}}</button>
-        <button v-if="!authenticated" v-on:click="login">GitHub で login して発言</button>
+        <button v-if="!authenticated" v-on:click="login">GitHubでloginして発言</button>
       </div>
     </div>
 
@@ -51,14 +57,15 @@
           message: '',
           authenticated: false,
           user: null,
+          img: null,
           sending: false
         },
 
         methods: {
-          say: async function(){
+          say: async function() {
             try {
               this.sending = true;
-              await chats.push({text: this.message, user: this.user});
+              await chats.push({text: this.message, user: this.user, img: this.img});
             } catch (e) {
               alert(e);
             }
@@ -66,9 +73,9 @@
             this.message = '';
             this.sending = false;
           },
-          login: async function() {
+
+          login: async function () {
             var provider = new firebase.auth.GithubAuthProvider();
-            provider.addScope('user');
             try {
               await firebase.auth().signInWithPopup(provider);
             } catch (e) {
@@ -76,16 +83,29 @@
               console.error(error);
             }
           }
+        },
+
+        filters: {
+          fromNow: (value) => moment(new Date(value)).fromNow()
         }
       });
 
       chats.on("value", function(snapshot) {
-        app.chats = snapshot.val()
+        let rawChats = snapshot.val();
+        let chats = [];
+        for (const key in rawChats) {
+          const chat = rawChats[key];
+          const fromNow = moment(new Date(chat.updated_at)).fromNow()
+
+          chats.push(Object.assign(chat, {fromNow}));
+        }
+        app.chats = chats;
       });
 
       firebase.auth().onAuthStateChanged(function(user) {
         if (user) {
-          app.user = user.displayName;
+          app.user = user.displayName || user.email || user.uid;
+          app.img = user.photoURL;
           app.authenticated = true;
         } else {
           app.authenticated = false;
